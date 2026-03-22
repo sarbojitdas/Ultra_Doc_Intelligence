@@ -1,0 +1,16 @@
+streamlit
+fastapi
+uvicorn
+pydantic
+python-dotenv
+
+langchain
+langchain-community
+langchain-core
+langchain-text-splitters
+python-multipart
+chromadb
+sentence-transformers
+pymupdf
+groq
+pypdf
