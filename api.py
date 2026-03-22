@@ -1,14 +1,14 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import hashlib
+import os
+from dotenv import load_dotenv
+import fitz  # PyMuPDF
+from groq import Groq
 
 # ---------------- Core Modules ----------------
-from core.loader import load_document
 from core.chunking import chunk_text
-from core.embeddings import get_embeddings
-from core.vectorstore import create_vectorstore, get_retriever
-from core.retriever import retrieve_docs
-from core.llm import llm_call
 from core.confidence import compute_confidence
 from core.guardrail import apply_guardrails
 
@@ -16,13 +16,32 @@ from core.guardrail import apply_guardrails
 from extraction.extractor import extract_structured
 from extraction.schema import schema
 
+# ---------------- Load ENV ----------------
+load_dotenv()
+
 # ---------------- App Init ----------------
 app = FastAPI()
+
+# ---------------- CORS (IMPORTANT FOR STREAMLIT) ----------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ---------------- In-memory storage ----------------
 db = {}
 cache = {}
 
+# ---------------- Groq Client ----------------
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    raise ValueError("❌ GROQ_API_KEY not set in environment variables")
+
+client = Groq(api_key=GROQ_API_KEY)
 
 # ---------------- Request Model ----------------
 class QueryRequest(BaseModel):
@@ -34,6 +53,22 @@ async def get_file_hash(file: UploadFile) -> str:
     content = await file.read()
     await file.seek(0)
     return hashlib.md5(content).hexdigest()
+
+
+# ---------------- Load Document ----------------
+def load_document(file: UploadFile):
+    content = file.file.read()
+    pdf = fitz.open(stream=content, filetype="pdf")
+
+    text = ""
+    for page in pdf:
+        text += page.get_text()
+
+    # 🔒 limit size (prevents token overflow)
+    if len(text) > 20000:
+        text = text[:20000]
+
+    return text
 
 
 # ---------------- Upload Endpoint ----------------
@@ -51,15 +86,8 @@ async def upload(file: UploadFile = File(...)):
     # Chunking
     chunks = chunk_text(full_text)
 
-    # Embeddings
-    embeddings = get_embeddings()
-
-    # Vectorstore + Retriever
-    vectorstore = create_vectorstore(chunks, embeddings)
-    retriever = get_retriever(vectorstore)
-
     # Store
-    db["retriever"] = retriever
+    db["chunks"] = chunks
     db["full_text"] = full_text
 
     cache[file_id] = True
@@ -76,20 +104,27 @@ async def upload(file: UploadFile = File(...)):
 async def ask(request: QueryRequest):
 
     query = request.query
-    retriever = db.get("retriever")
+    chunks = db.get("chunks")
 
-    if not retriever:
+    if not chunks:
         return {"error": "Upload document first"}
 
-    docs = retrieve_docs(query, retriever)
+    # 🔍 simple retrieval
+    relevant_chunks = [
+        chunk for chunk in chunks
+        if query.lower() in chunk.lower()
+    ]
 
-    # Convert Document -> text
-    doc_texts = [doc.page_content for doc in docs]
+    # fallback
+    if not relevant_chunks:
+        relevant_chunks = chunks[:5]
+
+    doc_texts = relevant_chunks[:5]
 
     context = "\n".join(doc_texts)
 
     prompt = f"""
-    Answer the question using only the context below.
+    Answer the question using ONLY the context below.
 
     Context:
     {context}
@@ -98,7 +133,16 @@ async def ask(request: QueryRequest):
     {query}
     """
 
-    raw_answer = llm_call(prompt)
+    # 🤖 GROQ LLM CALL
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": "Answer only from context."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    raw_answer = response.choices[0].message.content
 
     # Guardrails
     answer, guard_score = apply_guardrails(raw_answer, doc_texts)
