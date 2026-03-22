@@ -1,0 +1,86 @@
+# 🔒 Python cache files
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# 🔒 Virtual environments
+
+venv/
+env/
+ENV/
+.venv/
+
+# 🔒 Environment variables
+
+.env
+.env.*
+
+# 🔒 Streamlit secrets
+
+.streamlit/secrets.toml
+
+# 🔒 Logs
+
+*.log
+
+# 🔒 OS files
+
+.DS_Store
+Thumbs.db
+
+# 🔒 IDE / Editor files
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 🔒 Jupyter Notebook checkpoints
+
+.ipynb_checkpoints/
+
+# 🔒 Build / distribution
+
+build/
+dist/
+*.egg-info/
+
+# 🔒 FAISS / vector DB files (if stored locally)
+
+*.faiss
+*.pkl
+*.index
+
+# 🔒 Temporary files
+
+*.tmp
+*.temp
+
+# 🔒 Uploaded files (if saving locally)
+
+uploads/
+data/
+
+# 🔒 Coverage reports
+
+.coverage
+htmlcov/
+
+# 🔒 Testing
+
+.pytest_cache/
+
+# 🔒 Streamlit cache
+
+.streamlit/cache/
+
+# 🔒 Mac system files
+
+.AppleDouble
+.LSOverride
+
+# 🔒 Windows system files
+
+ehthumbs.db
+Desktop.ini
