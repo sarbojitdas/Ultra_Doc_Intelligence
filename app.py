@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-API_BASE_URL = "http://127.0.0.1:8000"
+API_BASE_URL = "https://ultra-doc-intelligence-bfll.onrender.com"
 
 st.set_page_config(page_title="Ultra Doc Intelligence", layout="wide")
 st.title("📄 Ultra Doc Intelligence")
